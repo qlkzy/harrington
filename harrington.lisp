@@ -1,32 +1,35 @@
+(defmacro defrule (name &body body)
+  `(defparameter ,name
+     (expand-rule-orientations (quote ,@body))))
 
 
-(defparameter place-carrier
-  '(((- * * *)
-     (- - - -)
-     (- * * *))
-    ((S = = =)
-     (S S S S)
-     (S = = =))))
+(defrule place-carrier
+  (((- * * *)
+    (- - - -)
+    (- * * *))
+   ((S = = =)
+    (S S S S)
+    (S = = =))))
 
-(defparameter place-hovercraft
-  '(((- - *)
-     (* - -)
-     (- - *))
-    ((S S =)
-     (= S S)
-     (S S =))))
+(defrule place-hovercraft
+  (((- - *)
+    (* - -)
+    (- - *))
+   ((S S =)
+    (= S S)
+    (S S =))))
 
-(defparameter place-battleship
-  '(((- - - -))
-    ((S S S S))))
+(defrule place-battleship
+  (((- - - -))
+   ((S S S S))))
 
-(defparameter place-cruiser
-  '(((- - -))
-    ((S S S))))
+(defrule place-cruiser
+  (((- - -))
+   ((S S S))))
 
-(defparameter place-destroyer
-  '(((- -))
-    ((S S))))
+(defrule place-destroyer
+  (((- -))
+   ((S S))))
 
 (defparameter placement-rules-touching
   (list place-carrier
@@ -38,12 +41,45 @@
 (defparameter board
   (make-array '(12 12) :initial-element '-))
 
+(defun north (s) s)
+(defun east (s) (rot s))
+(defun west (s) (rot (flip s)))
+(defun south (s) (flip (rot (flip (rot s)))))
+
+(defun rot (s)
+  (apply #'mapcar #'list s))
+
+(defun flip (s)
+  (mapcar #'reverse s))
+
+(defun many (s n)
+  (loop for i from 1 to n
+       collecting s))
+
+(defun random-choice (choices)
+  (elt choices (random (length choices))))
+
+(defun expand-rule-orientations (rule)
+  (mapcar
+   (lambda (f) (list (funcall f (car rule))
+                     (funcall f (cadr rule))))
+   '(north south east west)))
+
+(defun apply-placement-rules (rules board)
+  (loop for ship in rules
+     do (apply-one-rule-randomly ship board))
+  board)
+
+(defun apply-one-rule-randomly (rules board)
+  (let ((matchrules (loop for rule in rules appending
+                         (many rule (length (match (car rule) board))))))
+    (apply-rule-randomly (random-choice matchrules) board)
+    board))
 
 (defun apply-some-rules-randomly (rules board)
   (loop for rule in rules do
        (apply-rule-randomly rule board))
   board)
-
 
 (defun apply-rule-randomly (rule board)
   (let ((pos (random-match (car rule) board)))
@@ -77,7 +113,7 @@
 (defun random-match (pattern board)
   (let ((matches (match pattern board)))
     (when matches
-      (elt matches (random (length matches))))))
+      (random-choice matches))))
 
 (defun match (pattern board)
   (loop for ri from 0 below (car (array-dimensions board))
