@@ -154,41 +154,41 @@
    (= = =)))
 
 (defrule recognise-destroyer
-  ((* - - *)
-   (- X ? -)
-   (* - - *))
+  ((* ÷ ÷ *)
+   (÷ X ? ÷)
+   (* ÷ ÷ *))
   ((= = = =)
    (= = ↑ =)
    (= = = =)))
 
 (defrule recognise-cruiser-centre
-  ((* * - * *)
-   (- X ? X -)
-   (* * - * *))
+  ((* * ÷ * *)
+   (÷ X ? X ÷)
+   (* * ÷ * *))
   ((= = = = =)
    (= = ↑ = =)
    (= = = = =)))
 
 (defrule recognise-cruiser-end
-  ((* * - * *)
-   (- X X ? -)
-   (* * - * *))
+  ((* * ÷ * *)
+   (÷ X X ? ÷)
+   (* * ÷ * *))
   ((= = = = =)
    (= = = ↑ =)
    (= = = = =)))
 
 (defrule recognise-battleship-end
-  ((* * - - * *)
-   (- X X X ? -)
-   (* * - - * *))
+  ((* * ÷ ÷ * *)
+   (÷ X X X ? ÷)
+   (* * ÷ ÷ * *))
   ((= = = = = =)
    (= = = = ↑ =)
    (= = = = = =)))
 
 (defrule recognise-battleship-centre
-  ((* * - - * *)
-   (- X X ? X -)
-   (* * - - * *))
+  ((* * ÷ ÷ * *)
+   (÷ X X ? X ÷)
+   (* * ÷ ÷ * *))
   ((= = = = = =)
    (= = = ↑ = =)
    (= = = = = =)))
@@ -212,6 +212,14 @@
   ((? ? ?))
   ((= ↑ =)))
 
+(defrule eliminate-corner
+  ((* ÷ *)
+   (÷ ? ?)
+   (* ? *))
+  ((= = =)
+   (= ↓ ↑)
+   (= ↑ =)))
+
 ;;; Ignore rules
 
 ;;; Ignore rules recognise cells which are obviously not worth
@@ -232,11 +240,22 @@
   ((↓)))
 
 (defrule ignore-checkerboard
-  ((* - *)
-   (- * -)
-   (* - *))
+  ((* ÷ *)
+   (÷ ? ÷)
+   (* ÷ *))
   ((= = =)
    (= ↓ =)
+   (= = =)))
+
+
+;;; Inference Rules
+
+(defrule infer-checkerboard
+  ((* ÷ *)
+   (÷ ? ÷)
+   (* ÷ *))
+  ((= = =)
+   (= ~ =)
    (= = =)))
 
 
@@ -253,7 +272,7 @@
   explore-carrier)
 
 (defstrategy recognition
-    10
+    40
   recognise-neighbour
   recognise-line
   recognise-corner
@@ -264,7 +283,7 @@
   recognise-battleship-end
   recognise-battleship-centre)
 
-(defstrategy norepeat    
+(defstrategy norepeat
     10000
   ignore-misses
   ignore-hits
@@ -274,8 +293,13 @@
 (defstrategy elimination
     2
   eliminate-line
-  eliminate-cruciform)
+  eliminate-cruciform
+  eliminate-corner)
 
+
+(defstrategy inference
+    0
+  infer-checkerboard)
 
 
 (defparameter placement-rules-touching
@@ -357,6 +381,7 @@
   (case point
     ((=) t)
     ((S) (setf (aref (board-state board) row col) 'S))
+    ((~) (setf (aref (board-state board) row col) '-))
     ((↑) (incf (aref (board-weights board) row col) *weight-increment*))
     ((↓) (decf (aref (board-weights board) row col) *weight-increment*))))
 
@@ -366,9 +391,9 @@
       (random-choice matches))))
 
 (defun match (pattern board)
-  (loop for ri from 0 below (nrows board)
+  (loop for ri from -1 to (nrows board)
      appending
-       (loop for ci from 0 below (ncols board)
+       (loop for ci from -1 to (ncols board)
           when
             (match-here pattern board ri ci)
           collect (list ri ci))))
@@ -380,24 +405,31 @@
      always (loop
                for point in row
                for ci from start-col
-               always (and (inside-board board ri ci)
-                           (match-point point board ri ci)))))
+               always (match-point point board ri ci))))
 
 (defun match-point (point board row col)
-  (let ((state-at-point (aref (board-state board) row col)))
-    (case point
-      ((*) t)
-      ((×) (eq state-at-point '×))
-      ((-) (eq state-at-point '-))
-      ((?) (eq state-at-point '?))
-      ((X) (eq state-at-point 'X))
-      ((/) (member state-at-point '(? X))))))
+  (or
+   (eq point '*)
+   (and (inside-board board row col)
+        (let ((state-at-point (aref (board-state board) row col)))
+          (case point
+            ((*) t)
+            ((×) (eq state-at-point '×))
+            ((-) (eq state-at-point '-))
+            ((?) (eq state-at-point '?))
+            ((X) (eq state-at-point 'X))
+            ((÷) (member state-at-point '(× -)))
+            ((/) (member state-at-point '(? X))))))
+   (and (outside-board board row col)
+        (eq point '÷))))
 
 (defun outside-board (board row col)
   (not (inside-board board row col)))
 
 (defun inside-board (board row col)
-  (and (< row (nrows board))
+  (and (>= row 0)
+       (>= col 0)
+       (< row (nrows board))
        (< col (nrows board))))
 
 (defun nrows (board)
@@ -447,7 +479,12 @@
          (setf (board-weights player-board)
                (make-array '(12 12) :initial-element 0))
        ;; (preseed-checkerboard player-board)
-         (apply-strategies (list exploration recognition norepeat) player-board)
+         (apply-strategies (list inference
+                                 elimination
+                                 exploration
+                                 recognition
+                                 norepeat)
+                           player-board)
          (flatten-weights player-board)
          (destructuring-bind (r c) (choose-move player-board)
            (setf (aref (board-state player-board) r c)
@@ -468,7 +505,16 @@
             (when (> 0 (aref (board-weights board) r c))
               (setf (aref (board-weights board) r c) 0)))))
 
-(defun play-many-with-averages (n)
-  (float (let ((move-counts (loop for i from 1 to n
-                               collecting (caddr (play)))))
-           (/ (reduce #'+ move-counts) (length move-counts)))))
+(defun mean (s)
+  (/ (reduce #'+ s) (length s)))
+
+(defun median (s)
+  (elt (sort (copy-list s) #'>) (floor (/ (length s) 2))))
+
+(defun play-many (n)
+  (let ((results (loop for i from 1 to n
+                    collecting (caddr (play)))))
+    (format t "Mean: ~A~%Median: ~A~%"
+            (float (mean results))
+            (float (median results)))
+    (sort results #'<)))
