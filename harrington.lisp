@@ -1,6 +1,6 @@
 ;;; a blottleships AI
 
-;;; some definitions
+;;; We define a few structures to represent important concepts:
 
 (defstruct board
   (state (make-array '(12 12) :initial-element '?))
@@ -14,8 +14,8 @@
   weight
   rules)
 
-
-;;; a few macros to make it easy to introduce named rules and strategies
+;;; Rules and strategies come up often, so we define a couple of
+;;; macros to make it easy to introduce named rules and strategies:
 
 (defmacro defrule (name &body body)
   `(defparameter ,name
@@ -26,8 +26,12 @@
      (make-strategy :weight ,weight
                     :rules (append ,@rules))))
 
-
-;;; we expand rules into their four orientations at declaration time
+;;; When we declare a rule, we expand it into a list of for rules: one
+;;; for each orientation (referred to here as north, south, east, and
+;;; west). The two-dimensional list representing each part of the rule
+;;; is massaged into each of these orientations using a combination of
+;;; rotations (transforming row-major to column-major ordering, and
+;;; vice-versa) and flips (reversing the minor lists).
 
 (defun rot (s) (apply #'mapcar #'list s))
 (defun flip (s) (mapcar #'reverse s))
@@ -43,10 +47,43 @@
                           :action (funcall f (rule-action rule))))
    '(north south east west)))
 
+;;; Boards are arrays; dealing with their dimensions is moderately
+;;; verbose, so we introduce a few utility functions for the two
+;;; dimensions we care about.
+
+(defun nrows (board)
+  (car (array-dimensions (board-state board))))
+
+(defun ncols (board)
+  (cadr (array-dimensions (board-state board))))
+
+(defun inside-board (board row col)
+  (and (>= row 0)
+       (>= col 0)
+       (< row (nrows board))
+       (< col (nrows board))))
+
+(defun outside-board (board row col)
+  (not (inside-board board row col)))
+
+;;; A few miscellaneous utility functions, to replicate a list, and to
+;;; make a random choice from a list.
+
+(defun many (s n)
+  (loop for i from 1 to n
+     collecting s))
+
+(defun random-choice (choices)
+  (elt choices (random (length choices))))
+
+
 
-;;; next, we have a number of rules. A rule consists of a pattern and
-;;; an action, each of which is a list of lists representing a
-;;; two-dimensional pattern of matchers or action instructions
+;;; The whole program basically consists of repeatedly applying rules
+;;; which change the state and weights of the board.
+
+;;; A rule consists of a pattern and an action, each of which is a
+;;; list of lists representing a two-dimensional pattern of 'matchers'
+;;; or 'actions'.
 
 ;;; supported matchers
 ;;; '*' : match anything
@@ -55,15 +92,21 @@
 ;;; '?' : match only a cell whose value is unknown
 ;;; 'X' : match only a cell in which a hit has been registered
 ;;; '/' : match either an unknown cell or a hit cell (effectively ?|X)
+;;; '÷' : match any cell where a hit *cannot* be (effectively -|×)
 
 ;;; supported actions
 ;;; '=' : leave the cell unchanged
 ;;; 'S' : place part of a ship in the cell
+;;; '~' : set the cell to 'empty'
 ;;; '↑' : increment the weight associated with the cell
 ;;; '↓' : decrement the weight associated with the cell
 
 
-;;; placement rules---these are used to generate boards
+
+;;; Placment rules
+
+;;; Placement rules are used to construct a board at the start of the
+;;; game.
 
 (defrule place-carrier
   ((- * * *)
@@ -93,6 +136,11 @@
   ((- -))
   ((S S)))
 
+;;; Non-touching placement rules
+
+;;; These variants of the placement rules require that the ships not
+;;; be touching.
+
 
 (defrule place-carrier-no-touching
   ((÷ ÷ ÷ * * *)
@@ -109,7 +157,7 @@
 (defrule place-hovercraft-no-touching
   ((÷ ÷ ÷ ÷ *)
    (÷ - - ÷ ÷)
-   (÷ * - - ÷)
+   (* ÷ - - ÷)
    (÷ - - ÷ ÷)
    (÷ ÷ ÷ ÷ *))
   ((= = = = =)
@@ -300,6 +348,12 @@
 
 ;;; Inference Rules
 
+;;; Inference rules change the state of the board to make implicit
+;;; knowledge (such as that from the ignore-checkerboard rule)
+;;; explicit in the board. This information should generally be
+;;; superfluous if other rules have been written correctly, but these
+;;; rules provide a little extra assurance.
+
 (defrule infer-checkerboard
   ((* ÷ *)
    (÷ ? ÷)
@@ -351,6 +405,7 @@
     0
   infer-checkerboard)
 
+;;; a few global-type things
 
 (defparameter placement-rules-touching
   (list place-carrier
@@ -372,88 +427,36 @@
 (defvar *weight-increment*
   1)
 
-(defun many (s n)
-  (loop for i from 1 to n
-     collecting s))
+
+;;; Rule Matching
 
-(defun random-choice (choices)
-  (elt choices (random (length choices))))
+;;; First, we must define what it means for a matcher to match. For
+;;; most matchers, this just means checking whether the matcher
+;;; corresponds to the value in the state. Wildcards and the
+;;; ship-not-allowed marker are a little more nuanced, but still quite
+;;; simple.
 
-(defun apply-strategies (board &rest strategies)
-  (loop for strategy in strategies do
-       (apply-strategy strategy board))
-  board)
+(defun match-point (point board row col)
+  (or
+   ;; wildcard matches anywhere
+   (eq point '*)
+   ;; state matchers just lookup the value
+   (and (inside-board board row col)
+        (let ((state-at-point (aref (board-state board) row col)))
+          (case point
+            ((×) (eq state-at-point '×))
+            ((-) (eq state-at-point '-))
+            ((?) (eq state-at-point '?))
+            ((X) (eq state-at-point 'X))
+            ((÷) (member state-at-point '(× -)))
+            ((/) (member state-at-point '(? X))))))
+   ;; ship-not-allowed matcher can also match outside the board
+   (and (outside-board board row col)
+        (eq point '÷))))
 
-(defun apply-strategy (strategy board)
-  (let ((*weight-increment* (strategy-weight strategy)))
-    (apply-all-rules (strategy-rules strategy) board))
-  board)
 
-(defun apply-placement-rules (rules board)
-  (loop for ship in rules
-     do (apply-one-rule-randomly ship board))
-  board)
-
-(defun apply-one-rule-randomly (rules board)
-  (let ((matchrules (loop for rule in rules appending
-                         (many rule (length (match (rule-pattern rule) board))))))
-    (apply-rule-randomly (random-choice matchrules) board)
-    board))
-
-(defun apply-all-rules (rules board)
-  (loop for rule in rules do
-       (apply-rule-globally rule board))
-  board)
-
-(defun apply-some-rules-randomly (rules board)
-  (loop for rule in rules do
-       (apply-rule-randomly rule board))
-  board)
-
-(defun apply-rule-randomly (rule board)
-  (let ((pos (random-match (rule-pattern rule) board)))
-    (when pos
-      (destructuring-bind (r c) (random-match (rule-pattern rule) board)
-        (apply-action (rule-action rule) board r c))
-      board)))
-
-(defun apply-rule-globally (rule board)
-  (let ((matches (match (rule-pattern rule) board)))
-    (when matches
-      (loop for (r c) in matches
-         do (apply-action (rule-action rule) board r c))
-      board)))
-
-(defun apply-action (action board start-row start-col)
-  (loop
-     for row in action
-     for ri from start-row
-     do (loop
-           for point in row
-           for ci from start-col
-           do (apply-point point board ri ci)))
-  board)
-
-(defun apply-point (point board row col)
-  (case point
-    ((=) t)
-    ((S) (setf (aref (board-state board) row col) 'S))
-    ((~) (setf (aref (board-state board) row col) '-))
-    ((↑) (incf (aref (board-weights board) row col) *weight-increment*))
-    ((↓) (decf (aref (board-weights board) row col) *weight-increment*))))
-
-(defun random-match (pattern board)
-  (let ((matches (match pattern board)))
-    (when matches
-      (random-choice matches))))
-
-(defun match (pattern board)
-  (loop for ri from -1 to (nrows board)
-     appending
-       (loop for ci from -1 to (ncols board)
-          when
-            (match-here pattern board ri ci)
-          collect (list ri ci))))
+;;; For a pattern to match at a location, we simply require that each
+;;; of its individual matchers match at the corresponding offset
 
 (defun match-here (pattern board start-row start-col)
   (loop
@@ -464,36 +467,149 @@
                for ci from start-col
                always (match-point point board ri ci))))
 
-(defun match-point (point board row col)
-  (or
-   (eq point '*)
-   (and (inside-board board row col)
-        (let ((state-at-point (aref (board-state board) row col)))
-          (case point
-            ((*) t)
-            ((×) (eq state-at-point '×))
-            ((-) (eq state-at-point '-))
-            ((?) (eq state-at-point '?))
-            ((X) (eq state-at-point 'X))
-            ((÷) (member state-at-point '(× -)))
-            ((/) (member state-at-point '(? X))))))
-   (and (outside-board board row col)
-        (eq point '÷))))
+;;; To match a pattern against the board, we attempt to match it
+;;; across the entire board, and collect a list of those points where
+;;; the pattern matched the pattern m
 
-(defun outside-board (board row col)
-  (not (inside-board board row col)))
+(defun match (pattern board)
+  (loop for ri from -1 to (nrows board)
+     appending
+       (loop for ci from -1 to (ncols board)
+          when
+            (match-here pattern board ri ci)
+          collect (list ri ci))))
 
-(defun inside-board (board row col)
-  (and (>= row 0)
-       (>= col 0)
-       (< row (nrows board))
-       (< col (nrows board))))
+
+;;; Rule actions
 
-(defun nrows (board)
-  (car (array-dimensions (board-state board))))
+;;; Applying a single point of an action is a simple case analysis:
 
-(defun ncols (board)
-  (cadr (array-dimensions (board-state board))))
+(defun apply-point (point board row col)
+  (case point
+    ;; unchanged
+    ((=) t)
+    ;; adjust state
+    ((S) (setf (aref (board-state board) row col) 'S))
+    ((~) (setf (aref (board-state board) row col) '-))
+    ;; adjust weights
+    ((↑) (incf (aref (board-weights board) row col) *weight-increment*))
+    ((↓) (decf (aref (board-weights board) row col) *weight-increment*))))
+
+;;; Applying an action is simply a matter of applying all of its
+;;; points in turn
+
+(defun apply-action (action board start-row start-col)
+  (loop
+     for row in action
+     for ri from start-row
+     do (loop
+           for point in row
+           for ci from start-col
+           do (apply-point point board ri ci))))
+
+
+;;; Ship placement
+
+;;; Ship placement is a special case of rule application; whereas with
+;;; almost all rules, we want to apply them as often as possible
+;;; across the board, ship placement rules should each be applied
+;;; exactly once.
+
+;;; As we want to apply a rule at random, we clearly need to be able
+;;; to choose a random position from those at which the rule matches:
+
+(defun random-match (pattern board)
+  (let ((matches (match pattern board)))
+    (when matches
+      (random-choice matches))))
+
+;;; And then take that random position and apply the action of the
+;;; rule to it
+
+(defun apply-rule-randomly (rule board)
+  "Apply RULE to BOARD at a random choice from the locations at which
+it matches."
+  (let ((pos (random-match (rule-pattern rule) board)))
+    (when pos
+      (destructuring-bind (r c) (random-match (rule-pattern rule) board)
+        (apply-action (rule-action rule) board r c)))))
+
+;;; As each ship has an number of placement rules (one for each
+;;; orientation, and possibly more for touching/not touching other
+;;; ships), we must choose randomly from the possible rules. We do
+;;; this by counting the number of times each rule matches, and
+;;; replicating it that number of times. We can then make a
+;;; straightforward random choice between each of these rules, and
+;;; apply it.
+
+(defun apply-one-rule-randomly (rules board)
+  "Apply one of RULES to BOARD at random; the probability that each
+rule will be chosen is a function of how many times it matches BOARD."
+  (let ((matchrules (loop for rule in rules appending
+                         (many rule (length (match (rule-pattern rule) board))))))
+    (apply-rule-randomly (random-choice matchrules) board)))
+
+
+;;; With our random-rule-application functions now defined, all we
+;;; need to do is use them once for each ship.
+
+(defun apply-placement-rules (ship-rules board)
+  (loop for ship in ship-rules
+     do (apply-one-rule-randomly ship board)))
+
+
+;;; General rule application
+
+(defun apply-rule-globally (rule board)
+  (let ((matches (match (rule-pattern rule) board)))
+    (when matches
+      (loop for (r c) in matches
+         do (apply-action (rule-action rule) board r c)))))
+
+(defun apply-all-rules (rules board)
+  (loop for rule in rules do
+       (apply-rule-globally rule board)))
+
+
+;;; Strategies
+
+(defun apply-strategy (strategy board)
+  (let ((*weight-increment* (strategy-weight strategy)))
+    (apply-all-rules (strategy-rules strategy) board)))
+
+
+(defun apply-strategies (board &rest strategies)
+  (loop for strategy in strategies do
+       (apply-strategy strategy board)))
+
+
+
+
+;;; Choosing moves
+
+;;; Enormous negative numbers make the weights data structure hard to
+;;; read; they carry no more information than zero, so we can just
+;;; throw them away.
+
+(defun flatten-weights (board)
+  (loop for r from 0 below (nrows board) do
+       (loop for c from 0 below (ncols board) do
+            (when (> 0 (aref (board-weights board) r c))
+              (setf (aref (board-weights board) r c) 0)))))
+
+;;; Some strategies can be improved by overlaying a global
+;;; checkerboard pattern over the game board: this can help avoid
+;;; wasteful miss checks
+
+(defun preseed-checkerboard (board weight)
+  (loop for r from 0 below (nrows board) by 2 do
+       (loop for c from 0 below (ncols board) by 2 do
+            (incf (aref (board-weights board) r c) weight))))
+
+;;; The 'best' moves at each point are those which hit the
+;;; highest-weighted cell. We do this in two passes: one pass over the
+;;; weights finds the maximum, and a second pass finds all coordinates
+;;; at which that maximum appears.
 
 (defun max-weight (board)
   (loop for r from 0 below (nrows board) maximizing
@@ -507,18 +623,31 @@
             when (= (aref (board-weights board) r c) max-weight)
             collect (list r c)))))
 
+;;; Once we have a list of the "best" moves, we can just pick one at
+;;; random.
+
 (defun choose-move (board)
   (random-choice (best-moves board)))
+
+
+
+;;; Boards need a little more initialisation than just creating a
+;;; 12x12 array, because of the cutout:
+
+(defun setup-unreachable (board)
+  (loop for r from 0 below 6 do
+       (loop for c from 0 below 6 do
+            (setf (aref (board-state board) r c) '×))))
+
+;;; In order to determine when the game has finished (and possibly as
+;;; input to certain kinds of phased strategy), we need to know how
+;;; many hits a player has scored:
 
 (defun count-hits (board)
   (loop for r below (nrows board) summing
        (loop for c below (ncols board) counting
             (eq (aref (board-state board) r c) 'X))))
 
-(defun setup-unreachable (board)
-  (loop for r from 0 below 6 do
-       (loop for c from 0 below 6 do
-            (setf (aref (board-state board) r c) '×))))
 
 (defun play ()
   (let ((target-board (make-board))
@@ -556,16 +685,8 @@
          (incf move-counter))
     (list target-board player-board move-counter)))
 
-(defun preseed-checkerboard (board weight)
-  (loop for r from 0 below (nrows board) by 2 do
-       (loop for c from 0 below (ncols board) by 2 do
-            (incf (aref (board-weights board) r c) weight))))
-
-(defun flatten-weights (board)
-  (loop for r from 0 below (nrows board) do
-       (loop for c from 0 below (ncols board) do
-            (when (> 0 (aref (board-weights board) r c))
-              (setf (aref (board-weights board) r c) 0)))))
+
+;;; Statistics and analysis
 
 (defun mean (s)
   (/ (reduce #'+ s) (length s)))
