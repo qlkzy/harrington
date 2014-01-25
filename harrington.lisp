@@ -94,6 +94,56 @@
   ((S S)))
 
 
+(defrule place-carrier-no-touching
+  ((÷ ÷ ÷ * * *)
+   (÷ - ÷ ÷ ÷ ÷)
+   (÷ - - - - ÷)
+   (÷ - ÷ ÷ ÷ ÷)
+   (÷ ÷ ÷ * * *))
+  ((= = = = = =)
+   (= S = = = =)
+   (= S S S S =)
+   (= S = = = =)
+   (= = = = = =)))
+
+(defrule place-hovercraft-no-touching
+  ((÷ ÷ ÷ ÷ *)
+   (÷ - - ÷ ÷)
+   (÷ * - - ÷)
+   (÷ - - ÷ ÷)
+   (÷ ÷ ÷ ÷ *))
+  ((= = = = =)
+   (= S S = =)
+   (= = S S =)
+   (= S S = =)
+   (= = = = =)))
+
+(defrule place-battleship-no-touching
+  ((÷ ÷ ÷ ÷ ÷ ÷)
+   (÷ - - - - ÷)
+   (÷ ÷ ÷ ÷ ÷ ÷))
+  ((= = = = = =)
+   (= S S S S =)
+   (= = = = = =)))
+
+(defrule place-cruiser-no-touching
+  ((÷ ÷ ÷ ÷ ÷)
+   (÷ - - - ÷)
+   (÷ ÷ ÷ ÷ ÷))
+  ((= = = = =)
+   (= S S S =)
+   (= = = = =)))
+
+(defrule place-destroyer-no-touching
+  ((÷ ÷ ÷ ÷)
+   (÷ - - ÷)
+   (÷ ÷ ÷ ÷))
+  ((= = = =)
+   (= S S =)
+   (= = = =)))
+
+
+
 ;;; Exploration rules
 
 ;;; Exploration rules attempt to place ships across the whole board
@@ -309,6 +359,13 @@
         place-cruiser
         place-destroyer))
 
+(defparameter placement-rules-no-touching
+  (list place-carrier-no-touching
+        place-hovercraft-no-touching
+        place-battleship-no-touching
+        place-cruiser-no-touching
+        place-destroyer-no-touching))
+
 (defparameter the-board
   (make-board))
 
@@ -322,7 +379,7 @@
 (defun random-choice (choices)
   (elt choices (random (length choices))))
 
-(defun apply-strategies (strategies board)
+(defun apply-strategies (board &rest strategies)
   (loop for strategy in strategies do
        (apply-strategy strategy board))
   board)
@@ -478,13 +535,18 @@
        do
          (setf (board-weights player-board)
                (make-array '(12 12) :initial-element 0))
-       ;; (preseed-checkerboard player-board)
-         (apply-strategies (list inference
-                                 elimination
+         (if (< move-counter 7)
+             (progn
+               ;; (preseed-checkerboard player-board 3)
+               (apply-strategies player-board
+                                 inference
                                  exploration
-                                 recognition
-                                 norepeat)
-                           player-board)
+                                 norepeat))
+             (apply-strategies player-board
+                               inference
+                               exploration
+                               recognition
+                               norepeat))
          (flatten-weights player-board)
          (destructuring-bind (r c) (choose-move player-board)
            (setf (aref (board-state player-board) r c)
@@ -494,10 +556,10 @@
          (incf move-counter))
     (list target-board player-board move-counter)))
 
-(defun preseed-checkerboard (board)
+(defun preseed-checkerboard (board weight)
   (loop for r from 0 below (nrows board) by 2 do
        (loop for c from 0 below (ncols board) by 2 do
-            (incf (aref (board-weights board) r c) 1))))
+            (incf (aref (board-weights board) r c) weight))))
 
 (defun flatten-weights (board)
   (loop for r from 0 below (nrows board) do
