@@ -1,8 +1,36 @@
-(defun rot (s)
-  (apply #'mapcar #'list s))
+;;; a blottleships AI
 
-(defun flip (s)
-  (mapcar #'reverse s))
+;;; some definitions
+
+(defstruct board
+  (state (make-array '(12 12) :initial-element '?))
+  (weights (make-array '(12 12) :initial-element 0)))
+
+(defstruct rule
+  pattern
+  action)
+
+(defstruct strategy
+  weight
+  rules)
+
+
+;;; a few macros to make it easy to introduce named rules and strategies
+
+(defmacro defrule (name &body body)
+  `(defparameter ,name
+     (expand-rule-orientations (make-rule :pattern (quote ,(car body)) :action (quote ,(cadr body))))))
+
+(defmacro defstrategy (name weight &body rules)
+  `(defparameter ,name
+     (make-strategy :weight ,weight
+                    :rules (append ,@rules))))
+
+
+;;; we expand rules into their four orientations at declaration time
+
+(defun rot (s) (apply #'mapcar #'list s))
+(defun flip (s) (mapcar #'reverse s))
 
 (defun north (s) s)
 (defun east (s) (rot s))
@@ -11,180 +39,210 @@
 
 (defun expand-rule-orientations (rule)
   (mapcar
-   (lambda (f) (list (funcall f (car rule))
-                     (funcall f (cadr rule))))
+   (lambda (f) (make-rule :pattern (funcall f (rule-pattern rule))
+                          :action (funcall f (rule-action rule))))
    '(north south east west)))
 
+
+;;; next, we have a number of rules. A rule consists of a pattern and
+;;; an action, each of which is a list of lists representing a
+;;; two-dimensional pattern of matchers or action instructions
 
-(defmacro defrule (name &body body)
-  `(defparameter ,name
-     (expand-rule-orientations (quote ,@body))))
+;;; supported matchers
+;;; '*' : match anything
+;;; '-' : match only an empty cell
+;;; '×' : match only a cell whose value is outside the usable board
+;;; '?' : match only a cell whose value is unknown
+;;; 'X' : match only a cell in which a hit has been registered
+;;; '/' : match either an unknown cell or a hit cell (effectively ?|X)
 
+;;; supported actions
+;;; '=' : leave the cell unchanged
+;;; 'S' : place part of a ship in the cell
+;;; '↑' : increment the weight associated with the cell
+;;; '↓' : decrement the weight associated with the cell
+
+
+;;; placement rules---these are used to generate boards
 
 (defrule place-carrier
-  (((- * * *)
-    (- - - -)
-    (- * * *))
-   ((S = = =)
-    (S S S S)
-    (S = = =))))
+  ((- * * *)
+   (- - - -)
+   (- * * *))
+  ((S = = =)
+   (S S S S)
+   (S = = =)))
 
 (defrule place-hovercraft
-  (((- - *)
-    (* - -)
-    (- - *))
-   ((S S =)
-    (= S S)
-    (S S =))))
+  ((- - *)
+   (* - -)
+   (- - *))
+  ((S S =)
+   (= S S)
+   (S S =)))
 
 (defrule place-battleship
-  (((- - - -))
-   ((S S S S))))
+  ((- - - -))
+  ((S S S S)))
 
 (defrule place-cruiser
-  (((- - -))
-   ((S S S))))
+  ((- - -))
+  ((S S S)))
 
 (defrule place-destroyer
-  (((- -))
-   ((S S))))
+  ((- -))
+  ((S S)))
+
+
+;;; Exploration rules
+
+;;; Exploration rules attempt to place ships across the whole board
+;;; and increase the weighting of a square according to the
+;;; number of possible ship placements to which it contributes
 
 (defrule explore-carrier
-  (((/ * * *)
-    (/ / / /)
-    (/ * * *))
-   ((↑ = = =)
-    (↑ ↑ ↑ ↑)
-    (↑ = = =))))
+  ((/ * * *)
+   (/ / / /)
+   (/ * * *))
+  ((↑ = = =)
+   (↑ ↑ ↑ ↑)
+   (↑ = = =)))
 
 (defrule explore-hovercraft
-  (((/ / *)
-    (* / /)
-    (/ / *))
-   ((↑ ↑ =)
-    (= ↑ ↑)
-    (↑ ↑ =))))
+  ((/ / *)
+   (* / /)
+   (/ / *))
+  ((↑ ↑ =)
+   (= ↑ ↑)
+   (↑ ↑ =)))
 
 (defrule explore-battleship
-  (((/ / / /))
-   ((↑ ↑ ↑ ↑))))
+  ((/ / / /))
+  ((↑ ↑ ↑ ↑)))
 
 (defrule explore-cruiser
-  (((/ / /))
-   ((↑ ↑ ↑))))
+  ((/ / /))
+  ((↑ ↑ ↑)))
 
 (defrule explore-destroyer
-  (((/ /))
-   ((↑ ↑))))
+  ((/ /))
+  ((↑ ↑)))
+
+;;; Recognition rules
+
+;;; Recognition rules find particular patterns of hits that suggest
+;;; incomplete ships, and attempt to complete them
 
 (defrule recognise-neighbour
-  (((X ?))
-   ((= ↑))))
+  ((X ?))
+  ((= ↑)))
 
 (defrule recognise-line
-  (((X ? X))
-   ((= ↑ =))))
+  ((X ? X))
+  ((= ↑ =)))
 
 (defrule recognise-corner
-  (((? X)
-    (X *))
-   ((↑ =)
-    (= =))))
+  ((? X)
+   (X *))
+  ((↑ =)
+   (= =)))
 
 (defrule recognise-tee
-  (((X ? X)
-    (* X *))
-   ((= ↑ =)
-    (= = =))))
+  ((X ? X)
+   (* X *))
+  ((= ↑ =)
+   (= = =)))
 
 (defrule recognise-destroyer
-  (((* - - *)
-    (- X ? -)
-    (* - - *))
-   ((= = = =)
-    (= = ↑ =)
-    (= = = =))))
+  ((* - - *)
+   (- X ? -)
+   (* - - *))
+  ((= = = =)
+   (= = ↑ =)
+   (= = = =)))
 
 (defrule recognise-cruiser-centre
-  (((* * - * *)
-    (- X ? X -)
-    (* * - * *))
-   ((= = = = =)
-    (= = ↑ = =)
-    (= = = = =))))
+  ((* * - * *)
+   (- X ? X -)
+   (* * - * *))
+  ((= = = = =)
+   (= = ↑ = =)
+   (= = = = =)))
 
 (defrule recognise-cruiser-end
-  (((* * - * *)
-    (- X X ? -)
-    (* * - * *))
-   ((= = = = =)
-    (= = = ↑ =)
-    (= = = = =))))
+  ((* * - * *)
+   (- X X ? -)
+   (* * - * *))
+  ((= = = = =)
+   (= = = ↑ =)
+   (= = = = =)))
 
 (defrule recognise-battleship-end
-  (((* * - - * *)
-    (- X X X ? -)
-    (* * - - * *))
-   ((= = = = = =)
-    (= = = = ↑ =)
-    (= = = = = =))))
+  ((* * - - * *)
+   (- X X X ? -)
+   (* * - - * *))
+  ((= = = = = =)
+   (= = = = ↑ =)
+   (= = = = = =)))
 
 (defrule recognise-battleship-centre
-  (((* * - - * *)
-    (- X X ? X -)
-    (* * - - * *))
-   ((= = = = = =)
-    (= = = ↑ = =)
-    (= = = = = =))))
+  ((* * - - * *)
+   (- X X ? X -)
+   (* * - - * *))
+  ((= = = = = =)
+   (= = = ↑ = =)
+   (= = = = = =)))
+
+;;; Elimination rules
+
+;;; Elimination rules recognise patterns of unknown cells, and attempt
+;;; to explore them in the way which gives the most information in the
+;;; fewest shots (by attempting to create 'orphaned' cells which could
+;;; never contribute to a ship).
 
 (defrule eliminate-cruciform
-  (((* ? *)
-    (? ? ?)
-    (* ? *))
-   ((= = =)
-    (= ↑ =)
-    (= = =))))
+  ((* ? *)
+   (? ? ?)
+   (* ? *))
+  ((= = =)
+   (= ↑ =)
+   (= = =)))
 
 (defrule eliminate-line
-  (((? ? ?))
-   ((= ↑ =))))
+  ((? ? ?))
+  ((= ↑ =)))
+
+;;; Ignore rules
+
+;;; Ignore rules recognise cells which are obviously not worth
+;;; pursuing (such as cells which have already been shot at). This
+;;; acts similarly to a 'stop list', and allows the other patterns to
+;;; be written in a much more concise form.
 
 (defrule ignore-hits
-  (((X))
-   ((↓))))
+  ((X))
+  ((↓)))
 
 (defrule ignore-misses
-  (((-))
-   ((↓))))
+  ((-))
+  ((↓)))
 
 (defrule ignore-offboard
-  (((×))
-   ((↓))))
+  ((×))
+  ((↓)))
 
 (defrule ignore-checkerboard
-  (((* - *)
-    (- * -)
-    (* - *))
-   ((= = =)
-    (= ↓ =)
-    (= = =))))
+  ((* - *)
+   (- * -)
+   (* - *))
+  ((= = =)
+   (= ↓ =)
+   (= = =)))
 
-(defstruct board
-  (state (make-array '(12 12) :initial-element '?))
-  (weights (make-array '(12 12) :initial-element 0)))
+
+;;; Strategies
 
-
-(defparameter placement-rules-touching
-  (list place-carrier
-        place-hovercraft
-        place-battleship
-        place-cruiser
-        place-destroyer))
-
-(defmacro defstrategy (name weight &body rules)
-  `(defparameter ,name
-     (list ,weight
-           (append ,@rules))))
+;;; A strategy is a collection of rules with an associated weighting.
 
 (defstrategy exploration
     1
@@ -218,6 +276,14 @@
   eliminate-line
   eliminate-cruciform)
 
+
+
+(defparameter placement-rules-touching
+  (list place-carrier
+        place-hovercraft
+        place-battleship
+        place-cruiser
+        place-destroyer))
 
 (defparameter the-board
   (make-board))
@@ -227,7 +293,7 @@
 
 (defun many (s n)
   (loop for i from 1 to n
-       collecting s))
+     collecting s))
 
 (defun random-choice (choices)
   (elt choices (random (length choices))))
@@ -238,8 +304,8 @@
   board)
 
 (defun apply-strategy (strategy board)
-  (let ((*weight-increment* (car strategy)))
-    (apply-all-rules (cadr strategy) board))
+  (let ((*weight-increment* (strategy-weight strategy)))
+    (apply-all-rules (strategy-rules strategy) board))
   board)
 
 (defun apply-placement-rules (rules board)
@@ -249,7 +315,7 @@
 
 (defun apply-one-rule-randomly (rules board)
   (let ((matchrules (loop for rule in rules appending
-                         (many rule (length (match (car rule) board))))))
+                         (many rule (length (match (rule-pattern rule) board))))))
     (apply-rule-randomly (random-choice matchrules) board)
     board))
 
@@ -264,17 +330,17 @@
   board)
 
 (defun apply-rule-randomly (rule board)
-  (let ((pos (random-match (car rule) board)))
+  (let ((pos (random-match (rule-pattern rule) board)))
     (when pos
-      (destructuring-bind (r c) (random-match (car rule) board)
-        (apply-action (cadr rule) board r c))
+      (destructuring-bind (r c) (random-match (rule-pattern rule) board)
+        (apply-action (rule-action rule) board r c))
       board)))
 
 (defun apply-rule-globally (rule board)
-  (let ((matches (match (car rule) board)))
+  (let ((matches (match (rule-pattern rule) board)))
     (when matches
       (loop for (r c) in matches
-         do (apply-action (cadr rule) board r c))
+         do (apply-action (rule-action rule) board r c))
       board)))
 
 (defun apply-action (action board start-row start-col)
@@ -303,9 +369,9 @@
   (loop for ri from 0 below (nrows board)
      appending
        (loop for ci from 0 below (ncols board)
-             when
-               (match-here pattern board ri ci)
-             collect (list ri ci))))
+          when
+            (match-here pattern board ri ci)
+          collect (list ri ci))))
 
 (defun match-here (pattern board start-row start-col)
   (loop
@@ -380,7 +446,7 @@
        do
          (setf (board-weights player-board)
                (make-array '(12 12) :initial-element 0))
-         ;; (preseed-checkerboard player-board)
+       ;; (preseed-checkerboard player-board)
          (apply-strategies (list exploration recognition norepeat) player-board)
          (flatten-weights player-board)
          (destructuring-bind (r c) (choose-move player-board)
