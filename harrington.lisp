@@ -269,6 +269,57 @@ otherwise NIL is returned."
   ((/ /))
   ((↑ ↑)))
 
+;;;; Non-touching exploration rules
+
+(defrule explore-carrier-no-touching
+  ((* % * * * *)
+   (% / % % % *)
+   (% / / / / %)
+   (% / % % % *)
+   (* % * * * *))
+  ((= = = = = =)
+   (= ↑ = = = =)
+   (= ↑ ↑ ↑ ↑ =)
+   (= ↑ = = = =)
+   (= = = = = =)))
+
+(defrule explore-hovercraft-no-touching
+  ((* % % * *)
+   (% / / % *)
+   (* % / / %)
+   (% / / % *)
+   (* % % * *))
+  ((= = = = =)
+   (= ↑ ↑ = =)
+   (= = ↑ ↑ =)
+   (= ↑ ↑ = =)
+   (= = = = =)))
+
+(defrule explore-battleship-no-touching
+  ((* % % % % *)
+   (% / / / / %)
+   (* % % % % *))
+  ((= = = = = =)
+   (= ↑ ↑ ↑ ↑ =)
+   (= = = = = =)))
+
+(defrule explore-cruiser-no-touching
+  ((* % % % *)
+   (% / / / %)
+   (* % % % *))
+  ((= = = = =)
+   (= ↑ ↑ ↑ =)
+   (= = = = =)))
+
+(defrule explore-destroyer-no-touching
+  ((* % % *)
+   (% / / %)
+   (* % % *))
+  ((= = = =)
+   (= ↑ ↑ =)
+   (= = = =)))
+
+
 ;;;; Recognition rules
 
 ;;; Recognition rules find particular patterns of hits that suggest
@@ -603,6 +654,14 @@ otherwise NIL is returned."
   explore-hovercraft
   explore-carrier)
 
+(defstrategy exploration-no-touching
+    2
+  explore-destroyer-no-touching
+  explore-cruiser-no-touching
+  explore-battleship-no-touching
+  explore-hovercraft-no-touching
+  explore-carrier-no-touching)
+
 (defstrategy recognition
     30
   recognise-neighbour
@@ -678,10 +737,11 @@ otherwise NIL is returned."
             ((?) (eq state-at-point '?))
             ((X) (eq state-at-point 'X))
             ((÷) (member state-at-point '(× -)))
-            ((/) (member state-at-point '(? X))))))
+            ((/) (member state-at-point '(? X)))
+            ((%) (not (eq state-at-point 'X))))))
    ;; ship-not-allowed matcher can also match outside the board
    (and (outside-board board row col)
-        (eq point '÷))))
+        (member point '(÷ %)))))
 
 ;;; For a pattern to match at a location, we simply require that each
 ;;; of its individual matchers match at the corresponding offset
@@ -928,10 +988,12 @@ rule will be chosen is a function of how many times it matches BOARD."
                (apply-strategies player-board
                                  inference
                                  exploration
+                                 exploration-no-touching
                                  norepeat))
              (apply-strategies player-board
                                inference
                                exploration
+                               exploration-no-touching
                                recognition
                                norepeat))
          (destructuring-bind (r c) (choose-move player-board)
