@@ -306,33 +306,218 @@ otherwise NIL is returned."
   ((* * ÷ * *)
    (÷ X ? X ÷)
    (* * ÷ * *))
-  ((= = = = =)
+  ((= ↓ = ↓ =)
    (= = ↑ = =)
-   (= = = = =)))
+   (= ↓ = ↓ =)))
 
 (defrule recognise-cruiser-end
   ((* * ÷ * *)
    (÷ X X ? ÷)
    (* * ÷ * *))
-  ((= = = = =)
+  ((= ↓ = ↓ =)
    (= = = ↑ =)
-   (= = = = =)))
+   (= ↓ = ↓ =)))
 
 (defrule recognise-battleship-end
   ((* * ÷ ÷ * *)
    (÷ X X X ? ÷)
    (* * ÷ ÷ * *))
-  ((= = = = = =)
+  ((= ↓ = = ↓ =)
    (= = = = ↑ =)
-   (= = = = = =)))
+   (= ↓ = = ↓ =)))
 
 (defrule recognise-battleship-centre
   ((* * ÷ ÷ * *)
    (÷ X X ? X ÷)
    (* * ÷ ÷ * *))
-  ((= = = = = =)
+  ((= ↓ = = ↓ =)
    (= = = ↑ = =)
+   (= ↓ = = ↓ =)))
+
+(defrule recognise-hovercraft-tee
+  ((* * * * *)
+   (* ÷ X X ÷)
+   (÷ X ? ÷ *)
+   (* ÷ X X ÷)
+   (* * * * *))
+  ((= = ↓ ↓ = =)
+   (= = = = = =)
+   (= = ↑ = = =)
+   (= = = = = =)
+   (= = ↓ ↓ = =)))
+
+(defrule recognise-hovercraft-tip
+  ((* * * * *)
+   (* ÷ X X ÷)
+   (÷ ? X ÷ *)
+   (* ÷ X X ÷)
+   (* * * * *))
+  ((= = ↓ ↓ = =)
+   (= = = = = =)
+   (= ↑ = = = =)
+   (= = = = = =)
+   (= = ↓ ↓ = =)))
+
+(defrule recognise-hovercraft-wing-a
+  ((* * * * *)
+   (* ÷ ? X ÷)
+   (÷ X X ÷ *)
+   (* ÷ X X ÷)
+   (* * * * *))
+  ((= = ↓ ↓ = =)
+   (= = ↑ = = =)
+   (= = = = = =)
+   (= = = = = =)
+   (= = ↓ ↓ = =)))
+
+(defrule recognise-hovercraft-wing-b
+  ((* * * * *)
+   (* ÷ X X ÷)
+   (÷ X X ÷ *)
+   (* ÷ ? X ÷)
+   (* * * * *))
+  ((= = ↓ ↓ = =)
+   (= = = = = =)
+   (= = = = = =)
+   (= = ↑ = = =)
+   (= = ↓ ↓ = =)))
+
+(defrule recognise-hovercraft-trail-a
+  ((* * * * *)
+   (* ÷ X ? ÷)
+   (÷ X X ÷ *)
+   (* ÷ X X ÷)
+   (* * * * *))
+  ((= = ↓ ↓ = =)
+   (= = = ↑ = =)
+   (= = = = = =)
+   (= = = = = =)
+   (= = ↓ ↓ = =)))
+
+(defrule recognise-hovercraft-trail-b
+  ((* * * * *)
+   (* ÷ X X ÷)
+   (÷ X X ÷ *)
+   (* ÷ X ? ÷)
+   (* * * * *))
+  ((= = ↓ ↓ = =)
+   (= = = = = =)
+   (= = = = = =)
+   (= = = ↓ = =)
+   (= = ↓ ↓ = =)))
+
+(defrule recognise-carrier-centre-a
+  ((* * * * ÷ *)
+   (* * * * X ÷)
+   (÷ X X ? X ÷)
+   (* * * * X ÷)
+   (* * * * ÷ *))
+  ((= = = = = =)
+   (= ↓ ↓ ↓ = =)
+   (= = = ↑ = =)
+   (= ↓ ↓ ↓ = =)
    (= = = = = =)))
+
+(defrule recognise-carrier-centre-b
+  ((* * * * ÷ *)
+   (* * * * X ÷)
+   (÷ X ? X X ÷)
+   (* * * * X ÷)
+   (* * * * ÷ *))
+  ((= = = = = =)
+   (= ↓ ↓ ↓ = =)
+   (= = = ↑ = =)
+   (= ↓ ↓ ↓ = =)
+   (= = = = = =)))
+
+(defrule recognise-carrier-tee
+  ((* * * * ÷ *)
+   (* * * * X ÷)
+   (÷ X X X ? ÷)
+   (* * * * X ÷)
+   (* * * * ÷ *))
+  ((= = = = = =)
+   (= ↓ ↓ ↓ = =)
+   (= = = ↑ = =)
+   (= ↓ ↓ ↓ = =)
+   (= = = = = =)))
+
+(defrule recognise-carrier-tip
+  ((* * * * ÷ *)
+   (* * * * X ÷)
+   (÷ ? X X X ÷)
+   (* * * * X ÷)
+   (* * * * ÷ *))
+  ((= = = = = =)
+   (= ↓ ↓ ↓ = =)
+   (= = = ↑ = =)
+   (= ↓ ↓ ↓ = =)
+   (= = = = = =)))
+
+(defrule recognise-carrier-wing-a
+  ((* * * * ÷ *)
+   (* * * * ? ÷)
+   (÷ X X X X ÷)
+   (* * * * X ÷)
+   (* * * * ÷ *))
+  ((= = = = = =)
+   (= ↓ ↓ ↓ = =)
+   (= = = ↑ = =)
+   (= ↓ ↓ ↓ = =)
+   (= = = = = =)))
+
+(defrule recognise-carrier-wing-b
+  ((* * * * ÷ *)
+   (* * * * X ÷)
+   (÷ X X X X ÷)
+   (* * * * ? ÷)
+   (* * * * ÷ *))
+  ((= = = = = =)
+   (= ↓ ↓ ↓ = =)
+   (= = = ↑ = =)
+   (= ↓ ↓ ↓ = =)
+   (= = = = = =)))
+
+(defrule recognise-completed-cruiser
+  ((* * ÷ * *)
+   (÷ X X X ÷)
+   (* * ÷ * *))
+  ((= ↓ = ↓ =)
+   (= = = = =)
+   (= ↓ = ↓ =)))
+
+(defrule recognise-completed-battleship
+  ((* * ÷ ÷ * *)
+   (÷ X X X X ÷)
+   (* * ÷ ÷ * *))
+  ((= ↓ = = ↓ =)
+   (= = = = = =)
+   (= ↓ = = ↓ =)))
+
+(defrule recognise-completed-hovercraft
+  ((* * * * *)
+   (* ÷ X X ÷)
+   (÷ X X ÷ *)
+   (* ÷ X X ÷)
+   (* * * * *))
+  ((= = ↓ ↓ = =)
+   (= = = = = =)
+   (= = = = = =)
+   (= = = = = =)
+   (= = ↓ ↓ = =)))
+
+(defrule recognise-completed-carrier
+  ((* * * * ÷ *)
+   (* * * * X ÷)
+   (÷ X X X X ÷)
+   (* * * * X ÷)
+   (* * * * ÷ *))
+  ((= = = = = =)
+   (= ↓ ↓ ↓ = =)
+   (= = = = = =)
+   (= ↓ ↓ ↓ = =)
+   (= = = = = =)))
+
 
 ;;;; Elimination rules
 
@@ -419,7 +604,7 @@ otherwise NIL is returned."
   explore-carrier)
 
 (defstrategy recognition
-    40
+    30
   recognise-neighbour
   recognise-line
   recognise-corner
@@ -428,7 +613,23 @@ otherwise NIL is returned."
   recognise-cruiser-end
   recognise-cruiser-centre
   recognise-battleship-end
-  recognise-battleship-centre)
+  recognise-battleship-centre
+  recognise-hovercraft-tee
+  recognise-hovercraft-tip
+  recognise-hovercraft-wing-a
+  recognise-hovercraft-wing-b
+  recognise-hovercraft-trail-a
+  recognise-hovercraft-trail-b
+  recognise-carrier-tip
+  recognise-carrier-wing-a
+  recognise-carrier-wing-b
+  recognise-carrier-tee
+  recognise-carrier-centre-a
+  recognise-carrier-centre-b
+  recognise-completed-cruiser
+  recognise-completed-battleship
+  recognise-completed-hovercraft
+  recognise-completed-carrier)
 
 (defstrategy norepeat
     10000
@@ -514,15 +715,16 @@ otherwise NIL is returned."
 ;;; Applying an action at a single point is a simple case analysis:
 
 (defun apply-point (board point row col)
-  (case point
-    ;; unchanged
-    ((=) t)
-    ;; adjust state
-    ((S) (setf (aref (board-state board) row col) 'S))
-    ((~) (setf (aref (board-state board) row col) '-))
-    ;; adjust weights
-    ((↑) (incf (aref (board-weights board) row col) *weight-increment*))
-    ((↓) (decf (aref (board-weights board) row col) *weight-increment*))))
+  (when (inside-board board row col)
+    (case point
+      ;; unchanged
+      ((=) t)
+      ;; adjust state
+      ((S) (setf (aref (board-state board) row col) 'S))
+      ((~) (setf (aref (board-state board) row col) '-))
+      ;; adjust weights
+      ((↑) (incf (aref (board-weights board) row col) *weight-increment*))
+      ((↓) (decf (aref (board-weights board) row col) *weight-increment*)))))
 
 ;;;; Applying an entire action
 
@@ -732,12 +934,12 @@ rule will be chosen is a function of how many times it matches BOARD."
                                exploration
                                recognition
                                norepeat))
-         (flatten-weights player-board)
          (destructuring-bind (r c) (choose-move player-board)
            (setf (aref (board-state player-board) r c)
                  (if (eq (aref (board-state target-board) r c) 'S)
                      'X
                      '-)))
+         (flatten-weights player-board)
          (incf move-counter))
     (list target-board player-board move-counter)))
 
