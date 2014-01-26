@@ -10,6 +10,13 @@
 ;;; ``rules which recognise partially-completed ships'' and ``rules
 ;;; which recognise areas which cannot contain any ship''.
 
+;;;; Bookkeeping
+
+(defpackage :harrington
+  (:use :common-lisp))
+
+(in-package :harrington)
+
 ;;;; Structures
 
 ;;; We define a few structures to allow us to represent instances of
