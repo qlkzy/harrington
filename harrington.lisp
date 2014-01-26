@@ -327,30 +327,32 @@ otherwise NIL is returned."
    (= = = =)))
 
 
-;;;; Recognition rules
+;;;; Extension rules
 
-;;; Recognition rules find particular patterns of hits that suggest
-;;; incomplete ships, and attempt to complete them
-
-(defrule recognise-neighbour
+(defrule extend-neighbour
   ((X ?))
   ((= ↑)))
 
-(defrule recognise-line
+(defrule extend-line
   ((X ? X))
   ((= ↑ =)))
 
-(defrule recognise-corner
+(defrule extend-corner
   ((? X)
    (X *))
   ((↑ =)
    (= =)))
 
-(defrule recognise-tee
+(defrule extend-tee
   ((X ? X)
    (* X *))
   ((= ↑ =)
    (= = =)))
+
+;;;; Recognition rules
+
+;;; Recognition rules find particular patterns of hits that suggest
+;;; incomplete ships, and attempt to complete them
 
 (defrule recognise-destroyer
   ((* ÷ ÷ *)
@@ -410,11 +412,13 @@ otherwise NIL is returned."
    (÷ ? X ÷ *)
    (* ÷ X X ÷)
    (* * * * *))
-  ((= = ↓ ↓ = =)
-   (= = = = = =)
-   (= ↑ = = = =)
-   (= = = = = =)
-   (= = ↓ ↓ = =)))
+  ((= = ↓ ↓ =)
+   (= = = = =)
+   (= ↑ = = =)
+   (= = = = =)
+   (= = ↓ ↓ =)))
+
+
 
 (defrule recognise-hovercraft-wing-a
   ((* * * * *)
@@ -463,6 +467,24 @@ otherwise NIL is returned."
    (= = = = = =)
    (= = = ↓ = =)
    (= = ↓ ↓ = =)))
+
+(defrule recognise-hovercraft-tee-lax
+  ((* X X)
+   (X ? *)
+   (* X X)
+   (* * *))
+  ((= = =)
+   (= ↑ =)
+   (= = =)))
+
+(defrule recognise-hovercraft-tip-lax
+  ((* X X)
+   (? X *)
+   (* X X))
+  ((= = =)
+   (↑ = =)
+   (= = =)))
+
 
 (defrule recognise-carrier-centre-a
   ((* * * * ÷ *)
@@ -576,6 +598,106 @@ otherwise NIL is returned."
    (= ↓ ↓ ↓ = =)
    (= = = = = =)))
 
+(defrule recognise-battleship-centre-lax
+  ((X X ? X))
+  ((= = ↑ =)))
+
+(defrule recognise-hovercraft-tee-lax
+  ((* X X)
+   (X ? *)
+   (* X X)
+   (* * *))
+  ((= = =)
+   (= ↑ =)
+   (= = =)))
+
+(defrule recognise-hovercraft-tip-lax
+  ((* X X)
+   (? X *)
+   (* X X))
+  ((= = =)
+   (↑ = =)
+   (= = =)))
+
+(defrule recognise-hovercraft-wing-a-lax
+  ((* ? X)
+   (X X *)
+   (* X X))
+  ((= ↑ =)
+   (= = =)
+   (= = =)))
+
+(defrule recognise-hovercraft-wing-b-lax
+  ((* X X)
+   (X X *)
+   (* ? X))
+  ((= = =)
+   (= = =)
+   (= ↑ =)))
+
+(defrule recognise-hovercraft-trail-a-lax
+  ((* X ?)
+   (X X *)
+   (* X X))
+  ((= = ↑)
+   (= = =)
+   (= = =)))
+
+(defrule recognise-hovercraft-trail-b-lax
+  ((* X X)
+   (X X *)
+   (* X ?))
+  ((= = =)
+   (= = =)
+   (= = ↑)))
+
+(defrule recognise-carrier-tip-lax
+  ((* * * X)
+   (? X X X)
+   (* * * X))
+  ((= = = =)
+   (↑ = = =)
+   (= = = =)))
+
+(defrule recognise-carrier-centre-a-lax
+  ((* * * X)
+   (X ? X X)
+   (* * * X))
+  ((= = = =)
+   (= ↑ = =)
+   (= = = =)))
+
+(defrule recognise-carrier-centre-b-lax
+  ((* * * X)
+   (X X ? X)
+   (* * * X))
+  ((= = = =)
+   (= = ↑ =)
+   (= = = =)))
+
+(defrule recognise-carrier-tee-lax
+  ((* * * X)
+   (X X X ?)
+   (* * * X))
+  ((= = = =)
+   (= = = ↑)
+   (= = = =)))
+
+(defrule recognise-carrier-wing-a-lax
+  ((* * * ?)
+   (X X X X)
+   (* * * X))
+  ((= = = ↑)
+   (= = = =)
+   (= = = =)))
+
+(defrule recognise-carrier-wing-b-lax
+  ((* * * X)
+   (X X X X)
+   (* * * ?))
+  ((= = = =)
+   (= = = =)
+   (= = = ↑)))
 
 ;;;; Elimination rules
 
@@ -648,6 +770,20 @@ otherwise NIL is returned."
    (= ~ =)
    (= = =)))
 
+
+;;;; Adjacency Rules
+
+(defrule adjacent-unknown
+  ((? ?))
+  ((↑ ↑)))
+
+(defrule adjacent-miss
+  ((- ?))
+  ((= ↓)))
+
+(defrule adjacent-hit
+  ((X ?))
+  ((= ↓)))
 
 ;;;;; Strategies
 
@@ -669,12 +805,15 @@ otherwise NIL is returned."
   explore-hovercraft-no-touching
   explore-carrier-no-touching)
 
+(defstrategy extension
+    20
+  extend-neighbour
+  extend-line
+  extend-corner
+  extend-tee)
+
 (defstrategy recognition
-    30
-  recognise-neighbour
-  recognise-line
-  recognise-corner
-  recognise-tee
+    80
   recognise-destroyer
   recognise-cruiser-end
   recognise-cruiser-centre
@@ -692,6 +831,19 @@ otherwise NIL is returned."
   recognise-carrier-tee
   recognise-carrier-centre-a
   recognise-carrier-centre-b
+  recognise-battleship-centre-lax
+  recognise-hovercraft-tee-lax
+  recognise-hovercraft-tip-lax
+  recognise-hovercraft-wing-a-lax
+  recognise-hovercraft-wing-b-lax
+  recognise-hovercraft-trail-a-lax
+  recognise-hovercraft-trail-b-lax
+  recognise-carrier-tip-lax
+  recognise-carrier-wing-a-lax
+  recognise-carrier-wing-b-lax
+  recognise-carrier-tee-lax
+  recognise-carrier-centre-a-lax
+  recognise-carrier-centre-b-lax
   recognise-completed-cruiser
   recognise-completed-battleship
   recognise-completed-hovercraft
@@ -713,6 +865,12 @@ otherwise NIL is returned."
 (defstrategy inference
     0
   infer-checkerboard)
+
+(defstrategy adjacency
+    0.1
+  adjacent-unknown
+  adjacent-miss
+  adjacent-hit)
 
 ;;;; Weight increments
 
@@ -994,13 +1152,16 @@ rule will be chosen is a function of how many times it matches BOARD."
                ;; (preseed-checkerboard player-board 3)
                (apply-strategies player-board
                                  inference
+                                 ;; adjacency
                                  exploration
                                  exploration-no-touching
                                  norepeat))
              (apply-strategies player-board
                                inference
+                               ;; adjacency
                                exploration
                                exploration-no-touching
+                               extension
                                recognition
                                norepeat))
          (destructuring-bind (r c) (choose-move player-board)
