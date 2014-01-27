@@ -49,7 +49,7 @@
 (defmacro defstrategy (name weight &body rules)
   `(defparameter ,name
      (make-strategy :weight ,weight
-                    :rules (append ,@rules))))
+                    :rules (deduplicate-rules (append ,@rules)))))
 
 ;;;; Rule Expansion
 
@@ -77,6 +77,15 @@ possible orientations."
    (lambda (f) (make-rule :pattern (funcall f (rule-pattern rule))
                           :action (funcall f (rule-action rule))))
    '(north south east west)))
+
+(defun rule-equal (r1 r2)
+  (and (equal (rule-pattern r1)
+              (rule-pattern r2))
+       (equal (rule-action r1)
+              (rule-action r2))))
+
+(defun deduplicate-rules (rules)
+  (remove-duplicates rules :test #'rule-equal))
 
 ;;;; Board Dimensions
 
@@ -806,7 +815,7 @@ otherwise NIL is returned."
   explore-carrier-no-touching)
 
 (defstrategy extension
-    20
+    80
   extend-neighbour
   extend-line
   extend-corner
