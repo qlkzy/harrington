@@ -1147,7 +1147,7 @@ rule will be chosen is a function of how many times it matches BOARD."
        do
          (setf (board-weights player-board)
                (make-array '(12 12) :initial-element 0))
-         (if (< move-counter 7)
+         (if (< move-counter 10)
              (progn
                ;; (preseed-checkerboard player-board 3)
                (apply-strategies player-board
