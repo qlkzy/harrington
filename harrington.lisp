@@ -567,6 +567,14 @@ otherwise NIL is returned."
    (= ↓ ↓ ↓ = =)
    (= = = = = =)))
 
+(defrule recognise-completed-battleship
+  ((* ÷ ÷ *)
+   (÷ X X ÷)
+   (* ÷ ÷ *))
+  ((= = = =)
+   (= = = =)
+   (= = = =)))
+
 (defrule recognise-completed-cruiser
   ((* * ÷ * *)
    (÷ X X X ÷)
@@ -589,11 +597,11 @@ otherwise NIL is returned."
    (÷ X X ÷ *)
    (* ÷ X X ÷)
    (* * * * *))
-  ((= = ↓ ↓ = =)
-   (= = = = = =)
-   (= = = = = =)
-   (= = = = = =)
-   (= = ↓ ↓ = =)))
+  ((= = ↓ ↓ =)
+   (= = = = =)
+   (= = = = =)
+   (= = = = =)
+   (= = ↓ ↓ =)))
 
 (defrule recognise-completed-carrier
   ((* * * * ÷ *)
@@ -793,6 +801,38 @@ otherwise NIL is returned."
 (defrule adjacent-hit
   ((X ?))
   ((= ↓)))
+
+(defrule adjacent-double-miss
+  ((- ? -))
+  ((= ↓ =)))
+
+;;;; Squares to explore last
+
+(defrule explorelast-corner
+  ((× × ×)
+   (× ? ?)
+   (× ? *))
+  ((= = =)
+   (= ↓ =)
+   (= = =)))
+
+;;; Fixup rules
+
+(defrule no-cruciform-ships-a
+  ((÷ ÷ ÷)
+   (X X X)
+   (÷ ? ÷))
+  ((= = =)
+   (= = =)
+   (= ↓ =)))
+
+(defrule no-cruciform-ships-b
+  ((÷ ? ÷)
+   (X X X)
+   (÷ ? ÷))
+  ((= ↓ =)
+   (X X X)
+   (= ↓ =)))
 
 ;;;;; Strategies
 
@@ -876,10 +916,20 @@ otherwise NIL is returned."
   infer-checkerboard)
 
 (defstrategy adjacency
-    0.1
+    3
   adjacent-unknown
   adjacent-miss
+  adjacent-double-miss
   adjacent-hit)
+
+(defstrategy explorelast
+    10
+  explorelast-corner)
+
+(defstrategy smarter-recognition
+    10
+  no-cruciform-ships-a
+  no-cruciform-ships-b)
 
 ;;;; Weight increments
 
@@ -1085,6 +1135,11 @@ rule will be chosen is a function of how many times it matches BOARD."
        (loop for c from 0 below (ncols board) by 2 do
             (incf (aref (board-weights board) r c) weight))))
 
+(defun prepenalise-leading-diagonal (board weight)
+  (loop
+     for r from 0 below (nrows board)
+     for c from 0 below (nrows board)
+     do (decf (aref (board-weights board) r c) weight)))
 
 ;;;;; Choosing moves
 
@@ -1141,7 +1196,7 @@ rule will be chosen is a function of how many times it matches BOARD."
        (loop for c below (ncols board) counting
             (eq (aref (board-state board) r c) 'X))))
 
-(defun play ()
+(defun play (&optional debug)
   (let ((target-board (make-board))
         (player-board (make-board))
         (move-counter 0))
@@ -1156,23 +1211,37 @@ rule will be chosen is a function of how many times it matches BOARD."
        do
          (setf (board-weights player-board)
                (make-array '(12 12) :initial-element 0))
-         (if (< move-counter 10)
-             (progn
-               ;; (preseed-checkerboard player-board 3)
-               (apply-strategies player-board
-                                 inference
-                                 ;; adjacency
-                                 exploration
-                                 exploration-no-touching
-                                 norepeat))
-             (apply-strategies player-board
-                               inference
-                               ;; adjacency
-                               exploration
-                               exploration-no-touching
-                               extension
-                               recognition
-                               norepeat))
+         (cond
+           ((< move-counter 10)
+            (progn
+              ;; (preseed-checkerboard player-board 3)
+              ;; (prepenalise-leading-diagonal player-board 1)
+              (apply-strategies player-board
+                                inference
+                                adjacency
+                                exploration
+                                exploration-no-touching
+                                explorelast
+                                norepeat)))
+           ((>= (count-hits player-board) 20)
+            (apply-strategies player-board
+                              inference
+                              extension
+                              recognition
+                              smarter-recognition
+                              explorelast
+                              norepeat))
+           (t (apply-strategies player-board
+                                inference
+                                adjacency
+                                exploration
+                                exploration-no-touching
+                                extension
+                                recognition
+                                smarter-recognition
+                                explorelast
+                                norepeat)))
+         (when debug (format t "~A~%~A~%" (board-state target-board) player-board))
          (destructuring-bind (r c) (choose-move player-board)
            (setf (aref (board-state player-board) r c)
                  (if (eq (aref (board-state target-board) r c) 'S)
